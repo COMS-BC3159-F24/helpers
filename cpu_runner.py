@@ -43,51 +43,50 @@ class CPP(Magics):
     @magic_arguments()
     @argument('-n', '--name', type=str, help='File name that will be produced by the cell.')
     @argument('-c', '--compile', type=str, help='Compile command. Use true for default command or specify command in single quotes.')
-    @argument('-a', '--append', help='Should be appended to same file', action="store_true")
-    @argument('-s', '--style', type=str, help='Pygments style name')
     @cell_magic
     def cpp(self, line='', cell=None):
         '''
         C++ syntax highlighting cell magic.
         '''
         args = parse_argstring(self.cpp, line)
-        if args.name != None:
+        if args.name is not None:
             ex = args.name.split('.')[-1]
             if ex not in ['c', 'cpp', 'h', 'hpp']:
                 raise Exception('Name must end with .cpp, .c, .hpp, or .h')
         else:
             args.name = 'src.cpp'
 
-        if args.append:
-            mode = "a"
-        else:
-            mode = "w"
+        mode = "a" if args.append else "w"
 
         with open(args.name, mode) as f:
             f.write(cell)
 
-        if args.compile != None:
+        if args.compile is not None:
             try:
                 if args.compile == 'true':
                     self.compile(args.name, args.name.split('.')[0])
                 else:
-                    self.custom_compile(args.compile.replace("'", "").split(' '))
+                    # Ensure args.compile is a string and properly split
+                    if isinstance(args.compile, str):
+                        self.custom_compile(args.compile.replace("'", "").split(' '))
+                    else:
+                        raise ValueError("Compile argument must be a string")
             except subprocess.CalledProcessError as e:
-                    print_out(e.output.decode("utf8"))
+                print_out(e.output.decode("utf8"))
 
-        if args.style != None:
+        if args.style is not None:
             displayHTML(highlight(cell, CppLexer(), HtmlFormatter(full=True, nobackground=True, style=args.style)))
 
     @magic_arguments()
     @argument('-n', '--name', type=str, help='File name that will be produced by the cell.')
     @argument('-c', '--compile', type=str, help='Compile command. Use true for default command or specify command in single quotes.')
     @cell_magic
-    def cpprun(self, line='', cell=None):
+    def cpurun(self, line='', cell=None):
         '''
         C++ cell magic that compiles and runs the code.
         '''
-        args = parse_argstring(self.cpprun, line)
-        if args.name != None:
+        args = parse_argstring(self.cpurun, line)
+        if args.name is not None:
             ex = args.name.split('.')[-1]
             if ex not in ['c', 'cpp']:
                 raise Exception('Name must end with .cpp or .c')
@@ -101,10 +100,14 @@ class CPP(Magics):
         # Compile the code
         executable = args.name.split('.')[0]
         try:
-            if args.compile == 'true':
+            if args.compile is None or args.compile == 'true':
                 self.compile(args.name, executable)
             else:
-                self.custom_compile(args.compile.replace("'", "").split(' '))
+                # Ensure args.compile is a string and properly split
+                if isinstance(args.compile, str):
+                    self.custom_compile(args.compile.replace("'", "").split(' '))
+                else:
+                    raise ValueError("Compile argument must be a string")
         except subprocess.CalledProcessError as e:
             print_out(e.output.decode("utf8"))
             return
