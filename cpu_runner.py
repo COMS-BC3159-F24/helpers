@@ -2,93 +2,60 @@ import subprocess
 import os
 from IPython.core.magic import Magics, cell_magic, magics_class
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
-from pygments import highlight
-from pygments.lexers import CppLexer
-from pygments.formatters import HtmlFormatter
 from IPython.display import display, HTML
 
 def print_out(out: str):
+    """Prints the output line by line."""
     for l in out.split('\n'):
         print(l)
 
 def displayHTML(html_code):
-    '''
-    Display HTML in notebook
-    '''
+    """Displays HTML in notebook."""
     display(HTML(html_code))
 
 @magics_class
 class CPP(Magics):
     @staticmethod
-    def compile(src, out):
+    def compile_and_link(src, obj_file, executable, objects=[]):
+        """Compiles the source file into an object file and links it into an executable."""
         compiler = 'g++'
-        res = subprocess.check_output(
-            [compiler, "-o", out, src], stderr=subprocess.STDOUT)
-        print_out(res.decode("utf8"))
 
-    @staticmethod
-    def custom_compile(arg_list):
-        res = subprocess.check_output(
-            arg_list, stderr=subprocess.STDOUT)
-        print_out(res.decode("utf8"))
+        # Compile the source file to an object file
+        compile_cmd = [compiler, '-c', src, '-o', obj_file]
+        try:
+            res = subprocess.check_output(compile_cmd, stderr=subprocess.STDOUT)
+            print_out(res.decode("utf8"))
+        except subprocess.CalledProcessError as e:
+            print_out(e.output.decode("utf8"))
+            raise
+
+        # Link the object files to create the executable
+        link_cmd = [compiler, '-o', executable, obj_file] + objects
+        try:
+            res = subprocess.check_output(link_cmd, stderr=subprocess.STDOUT)
+            print_out(res.decode("utf8"))
+        except subprocess.CalledProcessError as e:
+            print_out(e.output.decode("utf8"))
+            raise
 
     @staticmethod
     def run(executable):
+        """Runs the executable."""
         try:
-            res = subprocess.check_output([f'./{executable}'], stderr=subprocess.STDOUT)
+            res = subprocess.check_output(['./' + executable], stderr=subprocess.STDOUT)
             print_out(res.decode("utf8"))
         except subprocess.CalledProcessError as e:
             print_out(e.output.decode("utf8"))
 
     @magic_arguments()
     @argument('-n', '--name', type=str, help='File name that will be produced by the cell.')
-    @argument('-c', '--compile', type=str, help='Compile command. Use true for default command or specify command in single quotes.')
-    @cell_magic
-    def cpp(self, line='', cell=None):
-        '''
-        C++ syntax highlighting cell magic.
-        '''
-        args = parse_argstring(self.cpp, line)
-        if args.name is not None:
-            ex = args.name.split('.')[-1]
-            if ex not in ['c', 'cpp', 'h', 'hpp']:
-                raise Exception('Name must end with .cpp, .c, .hpp, or .h')
-        else:
-            args.name = 'src.cpp'
-
-        mode = "a" if args.append else "w"
-
-        with open(args.name, mode) as f:
-            f.write(cell)
-
-        if args.compile is not None:
-            try:
-                if args.compile == 'true':
-                    self.compile(args.name, args.name.split('.')[0])
-                else:
-                    # Ensure args.compile is a string and properly split
-                    if isinstance(args.compile, str):
-                        self.custom_compile(args.compile.replace("'", "").split(' '))
-                    else:
-                        raise ValueError("Compile argument must be a string")
-            except subprocess.CalledProcessError as e:
-                print_out(e.output.decode("utf8"))
-
-        if args.style is not None:
-            displayHTML(highlight(cell, CppLexer(), HtmlFormatter(full=True, nobackground=True, style=args.style)))
-
-    @magic_arguments()
-    @argument('-n', '--name', type=str, help='File name that will be produced by the cell.')
-    @argument('-c', '--compile', type=str, help='Compile command. Use true for default command or specify command in single quotes.')
+    @argument('-o', '--objects', type=str, help='Comma-separated list of object files to link.')
     @cell_magic
     def cpurun(self, line='', cell=None):
-        '''
-        C++ cell magic that compiles and runs the code.
-        '''
+        """C++ cell magic that compiles and runs the code."""
         args = parse_argstring(self.cpurun, line)
-        if args.name is not None:
-            ex = args.name.split('.')[-1]
-            if ex not in ['c', 'cpp']:
+        if args.name:
+            if not args.name.endswith(('.cpp', '.c')):
                 raise Exception('Name must end with .cpp or .c')
         else:
             args.name = 'src.cpp'
@@ -97,17 +64,14 @@ class CPP(Magics):
         with open(args.name, 'w') as f:
             f.write(cell)
 
-        # Compile the code
-        executable = args.name.split('.')[0]
+        # Define output files and objects
+        executable = args.name.rsplit('.', 1)[0]
+        obj_file = executable + '.o'
+        objects = args.objects.split(',') if args.objects else []
+
         try:
-            if args.compile is None or args.compile == 'true':
-                self.compile(args.name, executable)
-            else:
-                # Ensure args.compile is a string and properly split
-                if isinstance(args.compile, str):
-                    self.custom_compile(args.compile.replace("'", "").split(' '))
-                else:
-                    raise ValueError("Compile argument must be a string")
+            # Compile the source file and link the object files
+            self.compile_and_link(args.name, obj_file, executable, objects)
         except subprocess.CalledProcessError as e:
             print_out(e.output.decode("utf8"))
             return
@@ -116,6 +80,6 @@ class CPP(Magics):
         self.run(executable)
 
 def load_ipython_extension(ip):
+    """Load the IPython extension."""
     os.system('pip install pygments ipywidgets')
-    plugin = CPP(ip)
-    ip.register_magics(plugin)
+    ip.register_magics(CPP(ip))
