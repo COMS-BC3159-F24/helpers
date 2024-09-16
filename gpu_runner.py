@@ -17,17 +17,17 @@ def displayHTML(html_code):
     '''
     display(HTML(html_code))
 
-
 @magics_class
 class GPURun(Magics):
     @staticmethod
-    def compile_and_run(src, out):
+    def compile_and_run(src, out, object_files=[]):
         compiler = 'nvcc'
 
         # Compile the CUDA code
         try:
-            compile_res = subprocess.check_output(
-                [compiler, "-o", out, src], stderr=subprocess.STDOUT)
+            # Include object files for linking
+            compile_cmd = [compiler, "-o", out, src] + object_files
+            compile_res = subprocess.check_output(compile_cmd, stderr=subprocess.STDOUT)
             print_out(compile_res.decode("utf8"))
         except subprocess.CalledProcessError as e:
             print("Compilation failed:")
@@ -46,6 +46,7 @@ class GPURun(Magics):
     @argument('-n', '--name', type=str, help='File name that will be produced by the cell.')
     @argument('-a', '--append', help='Should be appended to the same file', action="store_true")
     @argument('-s', '--style', type=str, help='Pygments style name')
+    @argument('-o', '--objects', type=str, help='Comma-separated list of additional object files.')
     @cell_magic
     def gpurun(self, line='', cell=None):
         '''
@@ -69,8 +70,11 @@ class GPURun(Magics):
         with open(args.name, mode) as f:
             f.write(cell)
 
+        # Collect additional object files
+        object_files = args.objects.split(',') if args.objects else []
+
         # Compile and run the CUDA code
-        self.compile_and_run(args.name, args.name.split('.')[0])
+        self.compile_and_run(args.name, args.name.split('.')[0], object_files)
 
         # Syntax highlighting for CUDA code
         if args.style is not None:
